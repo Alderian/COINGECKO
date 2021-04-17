@@ -1,3 +1,20 @@
+// Time to wait in miliseconds to call function.
+// this is to sparse function calling.
+// Recomended 5 seconds = 5 * 1000
+// The maximum allowed value is 300000 (or 5 minutes). (Google Apps reference limit)
+var waitInMiliseconds = 5 * 1000
+
+// How many times should we retry a failed funcion call
+// This is to avoid function calling too many times and to exceed function timeout
+// Recomended 3 times
+var maxCallingTimes = 3
+
+// Cache timeout
+// Avoids too much refreshed over time to prevent API from failing with too many calls
+// Timeout in seconds
+// Recomended 10 minutes, 600 seconds
+var cacheTimeout = 600
+
 /*====================================================================================================================================*
   CoinGecko Google Sheet Feed by Eloise1988
   ====================================================================================================================================
@@ -42,14 +59,17 @@
  * @param {cryptocurrency}          the cryptocurrency ticker you want the price from
  * @param {against fiat currency}   the fiat currency ex: usd  or eur
  * @param {parseOptions}            an optional fixed cell for automatic refresh of the data
+ * @param {calledTimes}             the number of times this function was called to control how many times its called
  * @customfunction
  *
  * @return a one-dimensional array containing the price
  **/
 
-async function GECKOPRICE(ticker,currency){
+async function GECKOPRICE(ticker,currency,parseOptions,calledTimes=0) {
+  if (calledTimes >= maxCallingTimes) {
+    return "Error: called too many times. " + calledTimes;
+  }
 
-  Utilities.sleep(Math.random() * 100)
   ticker=ticker.toUpperCase()
   currency=currency.toLowerCase()
   id_cache=ticker+currency+'price'
@@ -60,7 +80,7 @@ async function GECKOPRICE(ticker,currency){
   }
   
   try{
-    
+    Utilities.sleep(Math.random() * 100 + waitInMiliseconds)
     url="https://api.coingecko.com/api/v3/search?locale=fr&img_path_only=1"
     
     var res = await UrlFetchApp.fetch(url);
@@ -82,13 +102,13 @@ async function GECKOPRICE(ticker,currency){
     var parsedJSON = JSON.parse(content);
     
     price_gecko=parseFloat(parsedJSON[id_coin][currency]);
-    cache.put(id_cache, Number(price_gecko));
+    cache.put(id_cache, Number(price_gecko), cacheTimeout);
     
     return Number(price_gecko);
   }
   
   catch(err){
-    return GECKOPRICE(ticker,currency);
+    return GECKOPRICE(ticker,currency,parseOptions,calledTimes++);
   }
   
 }
@@ -104,13 +124,17 @@ async function GECKOPRICE(ticker,currency){
  * @param {cryptocurrency}          the cryptocurrency ticker you want the 24h volume from
  * @param {against fiat currency}   the fiat currency ex: usd  or eur
  * @param {parseOptions}            an optional fixed cell for automatic refresh of the data
+ * @param {calledTimes}             the number of times this function was called to control how many times its called
  * @customfunction
  *
  * @return a one-dimensional array containing the 24h volume
  **/
 
-async function GECKOVOLUME(ticker,currency){
-  Utilities.sleep(Math.random() * 100)
+async function GECKOVOLUME(ticker,currency,parseOptions,calledTimes=0) {
+  if (calledTimes >= maxCallingTimes) {
+    return "Error: called too many times. " + calledTimes;
+  }
+
   ticker=ticker.toUpperCase()
   currency=currency.toLowerCase()
   id_cache=ticker+currency+'volume'
@@ -123,8 +147,8 @@ async function GECKOVOLUME(ticker,currency){
   }
   
   try{
-    
-    url="https://api.coingecko.com/api/v3/search?locale=fr&img_path_only=1"
+    Utilities.sleep(Math.random() * 100 + waitInMiliseconds)
+    var url="https://api.coingecko.com/api/v3/search?locale=fr&img_path_only=1"
     
     var res = await UrlFetchApp.fetch(url);
     var content = res.getContentText();
@@ -147,13 +171,13 @@ async function GECKOVOLUME(ticker,currency){
     
     
     vol_gecko=parseFloat(parsedJSON[0].total_volume);
-    cache.put(id_cache, Number(vol_gecko));
+    cache.put(id_cache, Number(vol_gecko), cacheTimeout);
     
     return Number(vol_gecko);
   }
   
   catch(err){
-    return GECKOVOLUME(ticker,currency);
+    return GECKOVOLUME(ticker,currency,parseOptions,calledTimes++);
   }
 
 }
@@ -171,12 +195,16 @@ async function GECKOVOLUME(ticker,currency){
  * @param {against fiat currency}   the fiat currency ex: usd  or eur
  * @param {mktcap or fully diluted mktcap}  an optional boolean to get fully diluted valuation
  * @param {parseOptions}            an optional fixed cell for automatic refresh of the data
+ * @param {calledTimes}             the number of times this function was called to control how many times its called
  * @customfunction
  *
  * @returns the fully diluted market cap of BTCUSD
  **/
-async function GECKOCAP(ticker,currency,diluted=false){
-  Utilities.sleep(Math.random() * 100)
+async function GECKOCAP(ticker,currency,diluted=false,parseOptions,calledTimes=0) {
+  if (calledTimes >= maxCallingTimes) {
+    return "Error: called too many times. " + calledTimes;
+  }
+
   ticker=ticker.toUpperCase()
   currency=currency.toLowerCase()
   id_cache=ticker+currency+'mkt'
@@ -192,7 +220,7 @@ async function GECKOCAP(ticker,currency,diluted=false){
     return Number(cached);
   }
   try{
-    
+    Utilities.sleep(Math.random() * 100 + waitInMiliseconds)
     url="https://api.coingecko.com/api/v3/search?locale=fr&img_path_only=1"
     
     var res = await UrlFetchApp.fetch(url);
@@ -214,13 +242,15 @@ async function GECKOCAP(ticker,currency,diluted=false){
     var parsedJSON = JSON.parse(content);
     if (diluted==true) {if (parsedJSON[0].fully_diluted_valuation!= null){
       mkt_gecko=parseFloat(parsedJSON[0].fully_diluted_valuation);
-      cache.put(id_cache, Number(mkt_gecko));}
+      cache.put(id_cache, Number(mkt_gecko), cacheTimeout);
+    }
       
       else {mkt_gecko=""}}
       
     else 
     { mkt_gecko=parseFloat(parsedJSON[0].market_cap);
-      cache.put(id_cache, Number(mkt_gecko));}
+      cache.put(id_cache, Number(mkt_gecko), cacheTimeout);
+    }
       
     
     
@@ -228,7 +258,7 @@ async function GECKOCAP(ticker,currency,diluted=false){
   }
   
   catch(err){
-    return GECKOCAP(ticker,currency,diluted=false);
+    return GECKOCAP(ticker,currency,diluted=false,parseOptions,calledTimes++);
   }
 
 }
@@ -242,12 +272,16 @@ async function GECKOCAP(ticker,currency,diluted=false){
  * @param {id_coin}                 the id name of cryptocurrency ticker found in web address of Coingecko ex:https://www.coingecko.com/en/coins/bitcoin/usd 
  * @param {against fiat currency}   the fiat currency ex: usd  or eur
  * @param {parseOptions}            an optional fixed cell for automatic refresh of the data
+ * @param {calledTimes}             the number of times this function was called to control how many times its called
  * @customfunction
  *
  * @return a one-dimensional array containing the price
  **/
-async function GECKOPRICEBYNAME(id_coin,currency){
-  Utilities.sleep(Math.random() * 100)
+async function GECKOPRICEBYNAME(id_coin,currency,parseOptions,calledTimes=0) {
+  if (calledTimes >= maxCallingTimes) {
+    return "Error: called too many times. " + calledTimes;
+  }
+
   id_coin=id_coin.toLowerCase()
   currency=currency.toLowerCase()
   id_cache=id_coin+currency+'pricebyname'
@@ -258,8 +292,9 @@ async function GECKOPRICEBYNAME(id_coin,currency){
   if (cached != null) {
     return Number(cached);
   }
+
   try{
-    
+    Utilities.sleep(Math.random() * 100 + waitInMiliseconds)
     url="https://api.coingecko.com/api/v3/simple/price?ids="+id_coin+"&vs_currencies="+currency;
     
     var res = await UrlFetchApp.fetch(url);
@@ -267,13 +302,13 @@ async function GECKOPRICEBYNAME(id_coin,currency){
     var parsedJSON = JSON.parse(content);
     
     price_gecko=parseFloat(parsedJSON[id_coin][currency]);
-    cache.put(id_cache, Number(price_gecko));
+    cache.put(id_cache, Number(price_gecko), cacheTimeout);
     
     return Number(price_gecko);
   }
   
   catch(err){
-    return GECKOPRICEBYNAME(id_coin,currency);
+    return GECKOPRICEBYNAME(id_coin,currency,parseOptions,calledTimes++);
   }
 
 }
@@ -291,12 +326,16 @@ async function GECKOPRICEBYNAME(id_coin,currency){
  * @param {against fiat currency}   the fiat currency ex: usd  or eur
  * @param {mktcap or fully diluted mktcap}  an optional boolean to get fully diluted valuation
  * @param {parseOptions}            an optional fixed cell for automatic refresh of the data
+ * @param {calledTimes}             the number of times this function was called to control how many times its called
  * @customfunction
  *
  * @return a one-dimensional array containing the marketcap
  **/
-async function GECKOCAPBYNAME(id_coin,currency,diluted=false){
-  Utilities.sleep(Math.random() * 100)
+async function GECKOCAPBYNAME(id_coin,currency,diluted=false,parseOptions,calledTimes=0) {
+  if (calledTimes >= maxCallingTimes) {
+    return "Error: called too many times. " + calledTimes;
+  }
+
   id_coin=id_coin.toLowerCase()
   currency=currency.toLowerCase()
   id_cache=id_coin+currency+'capbyname'
@@ -311,7 +350,7 @@ async function GECKOCAPBYNAME(id_coin,currency,diluted=false){
     return Number(cached);
   }
   try{
-    
+    Utilities.sleep(Math.random() * 100 + waitInMiliseconds)
     url="https://api.coingecko.com/api/v3/coins/markets?vs_currency="+currency+"&ids="+id_coin;
     
     
@@ -320,13 +359,15 @@ async function GECKOCAPBYNAME(id_coin,currency,diluted=false){
     var parsedJSON = JSON.parse(content);
     if (diluted==true) {if (parsedJSON[0].fully_diluted_valuation!= null){
       mkt_gecko=parseFloat(parsedJSON[0].fully_diluted_valuation);
-      cache.put(id_cache, Number(mkt_gecko));}
+      cache.put(id_cache, Number(mkt_gecko), cacheTimeout);
+    }
       
       else {mkt_gecko=""}}
       
     else 
     { mkt_gecko=parseFloat(parsedJSON[0].market_cap);
-      cache.put(id_cache, Number(mkt_gecko));}
+      cache.put(id_cache, Number(mkt_gecko), cacheTimeout);
+    }
       
     
     
@@ -336,7 +377,7 @@ async function GECKOCAPBYNAME(id_coin,currency,diluted=false){
   
   
   catch(err){
-    return GECKOCAPBYNAME(id_coin,currency,diluted=false);
+    return GECKOCAPBYNAME(id_coin,currency,diluted=false,parseOptions,calledTimes++);
   }
 
 }
@@ -350,12 +391,16 @@ async function GECKOCAPBYNAME(id_coin,currency,diluted=false){
  * @param {id_coin}                 the id name of cryptocurrency ticker found in web address of Coingecko ex:https://www.coingecko.com/en/coins/bitcoin/usd 
  * @param {against fiat currency}   the fiat currency ex: usd  or eur
  * @param {parseOptions}            an optional fixed cell for automatic refresh of the data
+ * @param {calledTimes}             the number of times this function was called to control how many times its called
  * @customfunction
  *
  * @return a one-dimensional array containing the 24h volume
  **/
-async function GECKOVOLUMEBYNAME(id_coin,currency){
-  Utilities.sleep(Math.random() * 100)
+async function GECKOVOLUMEBYNAME(id_coin,currency,parseOptions,calledTimes=0) {
+  if (calledTimes >= maxCallingTimes) {
+    return "Error: called too many times. " + calledTimes;
+  }
+
   id_coin=id_coin.toLowerCase()
   currency=currency.toLowerCase()
   id_cache=id_coin+currency+'volbyname'
@@ -366,23 +411,23 @@ async function GECKOVOLUMEBYNAME(id_coin,currency){
   if (cached != null) {
     return Number(cached);
   } 
- 
-    
+  
+  
   try{
-    
+    Utilities.sleep(Math.random() * 100 + waitInMiliseconds);
     url="https://api.coingecko.com/api/v3/coins/markets?vs_currency="+currency+"&ids="+id_coin;
     
     var res = await UrlFetchApp.fetch(url);
     var content = res.getContentText();
     var parsedJSON = JSON.parse(content);
     vol_gecko=parseFloat(parsedJSON[0].total_volume);
-    cache.put(id_cache, Number(vol_gecko));
+    cache.put(id_cache, Number(vol_gecko), cacheTimeout);
     
     return Number(vol_gecko);
   }
   
   catch(err){
-    return GECKOVOLUMEBYNAME(id_coin,currency);
+    return GECKOVOLUMEBYNAME(id_coin,currency,parseOptions,calledTimes++);
   }
 
 }
@@ -401,12 +446,16 @@ async function GECKOVOLUMEBYNAME(id_coin,currency){
  * @param {price,volume, or marketcap}     the type of change you are looking for
  * @param {nb_days}                 the number of days you are looking for the price change, 365days=1year price change 
  * @param {parseOptions}            an optional fixed cell for automatic refresh of the data
+ * @param {calledTimes}             the number of times this function was called to control how many times its called
  * @customfunction
  *
  * @return a one-dimensional array containing the 7D%  price change on BTC (week price % change).
  **/
-async function GECKOCHANGE(ticker,ticker2,type, nb_days){
-  Utilities.sleep(Math.random() * 100)
+async function GECKOCHANGE(ticker,ticker2,type, nb_days,parseOptions,calledTimes=0) {
+  if (calledTimes >= maxCallingTimes) {
+    return "Error: called too many times. " + calledTimes;
+  }
+
   ticker=ticker.toUpperCase()
   ticker2=ticker2.toLowerCase()
   type=type.toLowerCase()
@@ -420,6 +469,7 @@ async function GECKOCHANGE(ticker,ticker2,type, nb_days){
     return Number(cached);
   }
   try{
+    Utilities.sleep(Math.random() * 100 + waitInMiliseconds);
     url="https://api.coingecko.com/api/v3/search?locale=fr&img_path_only=1"
     
     var res = await UrlFetchApp.fetch(url);
@@ -450,12 +500,12 @@ async function GECKOCHANGE(ticker,ticker2,type, nb_days){
     { vol_gecko="Wrong parameter, either price, volume or marketcap";}
     
     if (vol_gecko!="Wrong parameter, either price, volume or marketcap")
-      cache.put(id_cache, Number(vol_gecko));
+      cache.put(id_cache, Number(vol_gecko), cacheTimeout);
     return Number(vol_gecko);
   }
   
   catch(err){
-    return GECKOCHANGE(ticker,ticker2,type, nb_days);
+    return GECKOCHANGE(ticker,ticker2,type, nb_days,parseOptions,calledTimes++);
   }
 
 }  
@@ -470,13 +520,17 @@ async function GECKOCHANGE(ticker,ticker2,type, nb_days){
  * @param {cryptocurrency}          the cryptocurrency ticker you want the price from
  * @param {against fiat currency}   the fiat currency ex: usd  or eur
  * @param {parseOptions}            an optional fixed cell for automatic refresh of the data
+ * @param {calledTimes}             the number of times this function was called to control how many times its called
  * @customfunction
  *
  * @return a one-dimensional array containing the ATH price
  **/
 
-async function GECKOATH(ticker,currency){
-  Utilities.sleep(Math.random() * 100)
+async function GECKOATH(ticker,currency,parseOptions,calledTimes=0) {
+  if (calledTimes >= maxCallingTimes) {
+    return "Error: called too many times. " + calledTimes;
+  }
+
   ticker=ticker.toUpperCase()
   currency=currency.toLowerCase()
   id_cache=ticker+currency+"ath"
@@ -487,7 +541,7 @@ async function GECKOATH(ticker,currency){
   }
   
   try{
-    
+    Utilities.sleep(Math.random() * 100 + waitInMiliseconds);
     url="https://api.coingecko.com/api/v3/search?locale=fr&img_path_only=1"
     
     var res = await UrlFetchApp.fetch(url);
@@ -510,14 +564,14 @@ async function GECKOATH(ticker,currency){
     var parsedJSON = JSON.parse(content);
     
     ath_gecko=parseFloat(parsedJSON[0].ath);
-    cache.put(id_cache, Number(ath_gecko));
+    cache.put(id_cache, Number(ath_gecko), cacheTimeout);
     
     
     return Number(ath_gecko);
   }
   
   catch(err){
-    return GECKOATH(ticker,currency);
+    return GECKOATH(ticker,currency,parseOptions,calledTimes++);
   }
 
 }
@@ -536,22 +590,26 @@ async function GECKOATH(ticker,currency){
  * @param {date_ddmmyyy}           the date format dd-mm-yyy get open of the specified date, for close dd-mm-yyy+ 1day
  * @param {by_ticker boolean}       an optional true (data by ticker) false (data by id_name) 
  * @param {parseOptions}           an optional fixed cell for automatic refresh of the data
+ * @param {calledTimes}             the number of times this function was called to control how many times its called
  * @customfunction
  *
  * @return a one-dimensional array containing the historical open price of BTC -LTC on the 31-12-2020
  **/
-async function GECKOHIST(ticker,ticker2,type, date_ddmmyyy,by_ticker=true){
-  Utilities.sleep(Math.random() * 100)
+async function GECKOHIST(ticker,ticker2,type, date_ddmmyyy,by_ticker=true,parseOptions,calledTimes=0) {
+  if (calledTimes >= maxCallingTimes) {
+    return "Error: called too many times. " + calledTimes;
+  }
+
   ticker=ticker.toUpperCase()
   ticker2=ticker2.toLowerCase()
   type=type.toLowerCase()
   date_ddmmyyy=date_ddmmyyy.toString()
   id_cache=ticker+ticker2+type+date_ddmmyyy+'hist'
-
+  
   if(by_ticker==true){
     
     try{
-    
+      Utilities.sleep(Math.random() * 100 + waitInMiliseconds);
     url="https://api.coingecko.com/api/v3/search?locale=fr&img_path_only=1"
     
     var res = await UrlFetchApp.fetch(url);
@@ -566,7 +624,7 @@ async function GECKOHIST(ticker,ticker2,type, date_ddmmyyy,by_ticker=true){
       }
     }}
     catch(err){
-      return GECKOHIST(ticker,ticker2,type, date_ddmmyyy,by_ticker=true);
+      return GECKOHIST(ticker,ticker2,type, date_ddmmyyy,by_ticker=true,parseOptions,calledTimes++);
   }
   }
   else{
@@ -600,12 +658,12 @@ async function GECKOHIST(ticker,ticker2,type, date_ddmmyyy,by_ticker=true){
     { vol_gecko="Wrong parameter, either price, volume or marketcap";}
     
     if (vol_gecko!="Wrong parameter, either price, volume or marketcap")
-      cache.put(id_cache, Number(vol_gecko));
+      cache.put(id_cache, Number(vol_gecko), cacheTimeout);
     return Number(vol_gecko);
   }
   
   catch(err){
-    return GECKOHIST(ticker,ticker2,type, date_ddmmyyy,by_ticker=true);
+    return GECKOHIST(ticker,ticker2,type, date_ddmmyyy,by_ticker=true,parseOptions,calledTimes++);
   }
 
 }  
@@ -623,12 +681,16 @@ async function GECKOHIST(ticker,ticker2,type, date_ddmmyyy,by_ticker=true){
  * @param {price,volume, or marketcap}     the type of change you are looking for
  * @param {nb_days}                 the number of days you are looking for the price change, 365days=1year price change 
  * @param {parseOptions}            an optional fixed cell for automatic refresh of the data
+ * @param {calledTimes}             the number of times this function was called to control how many times its called
  * @customfunction
  *
  * @return a one-dimensional array containing the 7D%  price change on BTC (week price % change).
  **/
-async function GECKOCHANGEBYNAME(id_coin,ticker2,type, nb_days){
-  Utilities.sleep(Math.random() * 100)
+async function GECKOCHANGEBYNAME(id_coin,ticker2,type, nb_days,parseOptions,calledTimes=0) {
+  if (calledTimes >= maxCallingTimes) {
+    return "Error: called too many times. " + calledTimes;
+  }
+
   id_coin=id_coin.toLowerCase()
   ticker2=ticker2.toLowerCase()
   type=type.toLowerCase()
@@ -642,7 +704,7 @@ async function GECKOCHANGEBYNAME(id_coin,ticker2,type, nb_days){
     return Number(cached);
   }
   try{
-    
+    Utilities.sleep(Math.random() * 100 + waitInMiliseconds);
     url="https://api.coingecko.com/api/v3/coins/"+id_coin+"/market_chart?vs_currency="+ticker2+"&days="+nb_days;
     
     var res = await UrlFetchApp.fetch(url);
@@ -659,12 +721,12 @@ async function GECKOCHANGEBYNAME(id_coin,ticker2,type, nb_days){
     { vol_gecko="Wrong parameter, either price, volume or marketcap";}
     
     if (vol_gecko!="Wrong parameter, either price, volume or marketcap")
-      cache.put(id_cache, Number(vol_gecko));
+      cache.put(id_cache, Number(vol_gecko), cacheTimeout);
     return Number(vol_gecko);
   }
   
   catch(err){
-    return GECKOCHANGEBYNAME(id_coin,ticker2,type, nb_days);
+    return GECKOCHANGEBYNAME(id_coin,ticker2,type, nb_days,parseOptions,calledTimes++);
   }
 
 }  
@@ -682,17 +744,21 @@ async function GECKOCHANGEBYNAME(id_coin,ticker2,type, nb_days){
  * @param {parameter}              the parameter separated by "/" ex: "market_data/ath/usd" or "market_data/high_24h/usd"
  * @param {by_ticker boolean}       an optional true (data by ticker) false (data by id_name)          
  * @param {parseOptions}            an optional fixed cell for automatic refresh of the data
+ * @param {calledTimes}             the number of times this function was called to control how many times its called
  * @customfunction
  *
  * @return a one-dimensional array containing the specified parameter.
  **/
-async function GECKO_ID_DATA(ticker,parameter, by_ticker=true){
-  Utilities.sleep(Math.random() * 100)
+async function GECKO_ID_DATA(ticker,parameter, by_ticker=true,parseOptions,calledTimes=0) {
+  if (calledTimes >= maxCallingTimes) {
+    return "Error: called too many times. " + calledTimes;
+  }
+
   ticker=ticker.toUpperCase()
   if(by_ticker==true){
     
     try{
-    
+      Utilities.sleep(Math.random() * 100 + waitInMiliseconds);
     url="https://api.coingecko.com/api/v3/search?locale=fr&img_path_only=1"
     
     var res = await UrlFetchApp.fetch(url);
@@ -708,7 +774,7 @@ async function GECKO_ID_DATA(ticker,parameter, by_ticker=true){
       }
     }}
     catch(err){
-    return GECKO_ID_DATA(ticker,parameter, by_ticker);
+    return GECKO_ID_DATA(ticker,parameter, by_ticker,parseOptions,calledTimes++);
   }
   }
   else{
@@ -742,12 +808,12 @@ async function GECKO_ID_DATA(ticker,parameter, by_ticker=true){
     }
     
     
-    cache.put(id_cache, parsedJSON);
+    cache.put(id_cache, parsedJSON, cacheTimeout);
     return parsedJSON;
   }
   
   catch(err){
-    return GECKO_ID_DATA(ticker,parameter, by_ticker);
+    return GECKO_ID_DATA(ticker,parameter, by_ticker,parseOptions,calledTimes++);
   }
 
 }  
